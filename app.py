@@ -42,31 +42,41 @@ def load_model():
     # Check if it's an adapter (has adapter_config.json)
     is_adapter = os.path.exists(os.path.join(local_model_path, "adapter_config.json"))
     
-    # Quantization Config (Now enabling for both CPU and GPU if possible)
-    try:
+    # Quantization only works on GPU (CUDA)
+    # On CPU, bitsandbytes will crash or fail to load.
+    bnb_config = None
+    if device == "cuda":
+        print("💡 GPU detected: Using 4-bit quantization.")
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16 if device == "cuda" else torch.bfloat16,
+            bnb_4bit_compute_dtype=torch.float16,
             bnb_4bit_use_double_quant=True,
         )
-    except Exception as e:
-        print(f"⚠️ BitsAndBytes not fully supported on this CPU environment, falling back: {e}")
-        bnb_config = None
-    
+    else:
+        print("⚠️ CPU detected: Quantization disabled (not supported by bitsandbytes on CPU).")
+        print("📦 Attempting to load in bfloat16 to save memory...")
+
     try:
-        common_kwargs = {
-            "quantization_config": bnb_config,
-            "low_cpu_mem_usage": True,  # Critical for 16GB limit
+        # Configuration for loading
+        load_kwargs = {
+            "low_cpu_mem_usage": True,
             "trust_remote_code": True,
-            "device_map": "auto" # Let accelerate handle the placement
         }
+        
+        if device == "cuda":
+            load_kwargs["quantization_config"] = bnb_config
+            load_kwargs["device_map"] = "auto"
+        else:
+            # On CPU, we use bfloat16 to fit in ~14GB
+            load_kwargs["torch_dtype"] = torch.bfloat16
+            load_kwargs["device_map"] = {"": "cpu"}
 
         if is_adapter:
             print(f"Loading Base Model ({device})...")
             base_model = AutoModelForCausalLM.from_pretrained(
                 BASE_MODEL_ID,
-                **common_kwargs
+                **load_kwargs
             )
             print("Loading Adapter...")
             model = PeftModel.from_pretrained(base_model, local_model_path)
@@ -76,11 +86,12 @@ def load_model():
             print(f"Loading Full Merged Model ({device})...")
             model = AutoModelForCausalLM.from_pretrained(
                 local_model_path,
-                **common_kwargs
+                **load_kwargs
             )
             tokenizer = AutoTokenizer.from_pretrained(local_model_path, trust_remote_code=True)
             
         tokenizer.pad_token = tokenizer.eos_token
+        print("✅ Model loaded successfully!")
         return model, tokenizer
         
     except Exception as e:
