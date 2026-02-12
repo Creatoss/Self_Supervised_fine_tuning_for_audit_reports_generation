@@ -11,10 +11,16 @@ MODEL_DIR = "Models/Self_Supervised_finetuning_Model/audit-mistral-7b-qlora"
 BASE_MODEL_ID = "mistralai/Mistral-7B-v0.1" # Fallback base model
 MAX_NEW_TOKENS = 512
 
+# Determine device
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"🖥️ Using device: {device}")
+
 def find_model_path(root_dir):
     """
     Recursively finds the first directory containing a model config file.
     """
+    if not os.path.exists(root_dir):
+        return None
     for root, dirs, files in os.walk(root_dir):
         if "adapter_config.json" in files or "config.json" in files:
             return root
@@ -36,19 +42,23 @@ def load_model():
     # Check if it's an adapter (has adapter_config.json)
     is_adapter = os.path.exists(os.path.join(local_model_path, "adapter_config.json"))
     
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_quant_type="nf4",
-        bnb_4bit_compute_dtype=torch.float16,
-    )
+    # Quantization only works on GPU
+    bnb_config = None
+    if device == "cuda":
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.float16,
+        )
     
     try:
         if is_adapter:
-            print("Loading Base Model (QLoRA)...")
+            print(f"Loading Base Model ({device})...")
             base_model = AutoModelForCausalLM.from_pretrained(
                 BASE_MODEL_ID,
                 quantization_config=bnb_config,
-                device_map="auto",
+                device_map="auto" if device == "cuda" else None,
+                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
                 trust_remote_code=True
             )
             print("Loading Adapter...")
@@ -57,14 +67,18 @@ def load_model():
             tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID, trust_remote_code=True)
             
         else:
-            print("Loading Full Merged Model...")
+            print(f"Loading Full Merged Model ({device})...")
             model = AutoModelForCausalLM.from_pretrained(
                 local_model_path,
                 quantization_config=bnb_config,
-                device_map="auto",
+                device_map="auto" if device == "cuda" else None,
+                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
                 trust_remote_code=True
             )
             tokenizer = AutoTokenizer.from_pretrained(local_model_path, trust_remote_code=True)
+            
+        if device == "cpu":
+            model = model.to("cpu")
             
         tokenizer.pad_token = tokenizer.eos_token
         return model, tokenizer
@@ -88,7 +102,7 @@ def generate_audit_report(instruction, context=""):
         prompt += f"### Input:\n{context}\n\n"
     prompt += "### Response:\n"
     
-    inputs = tokenizer(prompt, return_tensors="pt").to("cuda")
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
     
     with torch.no_grad():
         outputs = model.generate(
