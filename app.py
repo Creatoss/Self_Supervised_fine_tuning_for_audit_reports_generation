@@ -11,22 +11,27 @@ MODEL_DIR = "Models/Self_Supervised_finetuning_Model/audit-mistral-7b-qlora"
 BASE_MODEL_ID = "mistralai/Mistral-7B-v0.1" # Fallback base model
 MAX_NEW_TOKENS = 512
 
+def find_model_path(root_dir):
+    """
+    Recursively finds the first directory containing a model config file.
+    """
+    for root, dirs, files in os.walk(root_dir):
+        if "adapter_config.json" in files or "config.json" in files:
+            return root
+    return None
+
 def load_model():
     """
-    Loads the model from the local 'models' directory if available.
-    Supports both full merged models and PEFT adapters.
+    Loads the model by searching for config files.
     """
-    print(f"Checking for models in {MODEL_DIR}...")
-    
-    # simplistic discovery: take first subdirectory in models/
-    subdirs = [os.path.join(MODEL_DIR, d) for d in os.listdir(MODEL_DIR) if os.path.isdir(os.path.join(MODEL_DIR, d))]
-    local_model_path = subdirs[0] if subdirs else None
+    print(f"🔍 Searching for models in {MODEL_DIR}...")
+    local_model_path = find_model_path(MODEL_DIR)
 
     if not local_model_path:
-        print(f"⚠️ No local model found in {MODEL_DIR}. Please place your model folder inside 'models/'.")
+        print(f"⚠️ No local model found in {MODEL_DIR}. Please check your directory structure.")
         return None, None
         
-    print(f"✅ Found local model at: {local_model_path}")
+    print(f"✅ Found model path at: {local_model_path}")
     
     # Check if it's an adapter (has adapter_config.json)
     is_adapter = os.path.exists(os.path.join(local_model_path, "adapter_config.json"))
