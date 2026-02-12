@@ -1,8 +1,8 @@
 gradio==5.15.0
 huggingface_hub
 torch
+bitsandbytes>=0.43.0
+accelerate
 transformers
 peft
-accelerate
-bitsandbytes
 sentencepiece

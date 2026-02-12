@@ -42,43 +42,43 @@ def load_model():
     # Check if it's an adapter (has adapter_config.json)
     is_adapter = os.path.exists(os.path.join(local_model_path, "adapter_config.json"))
     
-    # Quantization only works on GPU
-    bnb_config = None
-    if device == "cuda":
+    # Quantization Config (Now enabling for both CPU and GPU if possible)
+    try:
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_compute_dtype=torch.float16 if device == "cuda" else torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
         )
+    except Exception as e:
+        print(f"⚠️ BitsAndBytes not fully supported on this CPU environment, falling back: {e}")
+        bnb_config = None
     
     try:
+        common_kwargs = {
+            "quantization_config": bnb_config,
+            "low_cpu_mem_usage": True,  # Critical for 16GB limit
+            "trust_remote_code": True,
+            "device_map": "auto" # Let accelerate handle the placement
+        }
+
         if is_adapter:
             print(f"Loading Base Model ({device})...")
             base_model = AutoModelForCausalLM.from_pretrained(
                 BASE_MODEL_ID,
-                quantization_config=bnb_config,
-                device_map="auto" if device == "cuda" else None,
-                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-                trust_remote_code=True
+                **common_kwargs
             )
             print("Loading Adapter...")
             model = PeftModel.from_pretrained(base_model, local_model_path)
-            # Use base model tokenizer
             tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID, trust_remote_code=True)
             
         else:
             print(f"Loading Full Merged Model ({device})...")
             model = AutoModelForCausalLM.from_pretrained(
                 local_model_path,
-                quantization_config=bnb_config,
-                device_map="auto" if device == "cuda" else None,
-                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-                trust_remote_code=True
+                **common_kwargs
             )
             tokenizer = AutoTokenizer.from_pretrained(local_model_path, trust_remote_code=True)
-            
-        if device == "cpu":
-            model = model.to("cpu")
             
         tokenizer.pad_token = tokenizer.eos_token
         return model, tokenizer
