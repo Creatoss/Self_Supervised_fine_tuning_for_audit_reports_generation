@@ -7,7 +7,7 @@ import os
 import shutil
 
 # --- Configuration ---
-MODEL_DIR = "Models"
+MODEL_DIR = "Models/Self_Supervised_finetuning_Model/audit-mistral-7b-qlora"
 BASE_MODEL_ID = "mistralai/Mistral-7B-v0.1" # Fallback base model
 MAX_NEW_TOKENS = 512
 
