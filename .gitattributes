@@ -1,0 +1,10 @@
+
+# Enable LFS for common model weight file types
+*.safetensors filter=lfs diff=lfs merge=lfs -text
+*.bin filter=lfs diff=lfs merge=lfs -text
+*.pt filter=lfs diff=lfs merge=lfs -text
+*.pth filter=lfs diff=lfs merge=lfs -text
+*.onnx filter=lfs diff=lfs merge=lfs -text
+
+# Enable LFS for models directory
+Models/** filter=lfs diff=lfs merge=lfs -text

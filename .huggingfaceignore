@@ -1,0 +1,15 @@
+
+Data/
+notebooks/
+docs/
+.git/
+.github/
+.vscode/
+rag_audit_generation.ipynb
+audit_model_dpo_implementation.ipynb
+audit_llama_7b_finetuning.ipynb
+audit_model_finetuning.ipynb
+rag_setup_fix.py
+__pycache__/
+*.ipynb_checkpoints
+.gemini/
